@@ -10,7 +10,7 @@ import org.reactivecouchbase.client.{ReactiveCouchbaseException, RawRow, QueryEn
 import akka.actor.{Props, ActorRef, ActorLogging, Actor}
 import akka.pattern._
 import java.util.concurrent.atomic.AtomicReference
-import akka.routing.RoundRobinRouter
+import akka.routing.{RoundRobinPool}
 import akka.util.Timeout
 import java.util.concurrent.TimeUnit
 
@@ -87,7 +87,7 @@ object Views {
   private[experimental] def pass(view: View, query: Query, bucket: CouchbaseBucket, ec: ExecutionContext): Future[JsArray] = {
     implicit val timeout = Timeout(bucket.ecTimeout, TimeUnit.MILLISECONDS)
     val ref: ActorRef = workers.get.getOrElse({
-       workers.set(Some(bucket.cbDriver.system().actorOf(Props[QueryWorker].withRouter(RoundRobinRouter(bucket.workersNbr)), "queries-dispatcher")))
+       workers.set(Some(bucket.cbDriver.system().actorOf(Props[QueryWorker].withRouter(RoundRobinPool(bucket.workersNbr)), "queries-dispatcher")))
        workers.get().get
     })
     (ref ? SendQuery(view, query, bucket, ec)).mapTo[JsArray]

@@ -1,10 +1,14 @@
 package org.reactivecouchbase
 
+import com.ning.http.client.Realm.AuthScheme
+
 import scala.concurrent._
 import play.api.libs.iteratee._
 import play.api.libs.json._
-import com.ning.http.client.{Response, AsyncCompletionHandler}
+import com.ning.http.client.{Realm, AsyncHttpClient, Response, AsyncCompletionHandler}
 import org.reactivecouchbase.client.ReactiveCouchbaseException
+
+case class AuthorizationFields(user: String, password: String)
 
 /**
  * Container to run N1QL query against a Couchbase Server. Uses it's own HTTP client from CouchbaseBucket
@@ -14,7 +18,7 @@ import org.reactivecouchbase.client.ReactiveCouchbaseException
  * @param host the host on which N1QL server is running
  * @param port the port of the N1QL server
  */
-class N1QLQuery(bucket: CouchbaseBucket, query: String, host: String, port: String) {
+class N1QLQuery(bucket: CouchbaseBucket, query: String, host: String, port: String, authorizationFields: Option[AuthorizationFields]) {
   /**
    * The N1QL URL for querying
    */
@@ -75,6 +79,22 @@ class N1QLQuery(bucket: CouchbaseBucket, query: String, host: String, port: Stri
   }
 
   /**
+    * Create the Realm for authorization
+    *
+    * @param authorizationFields
+    * @return the Realm
+    */
+
+  def createRealm(authorizationFields: Option[AuthorizationFields]): Realm = {
+    new Realm.RealmBuilder()
+      .setPrincipal(authorizationFields.get.user)
+      .setPassword(authorizationFields.get.password)
+      .setUsePreemptiveAuth(true)
+      .setScheme(AuthScheme.BASIC)
+      .build()
+  }
+
+  /**
    *
    * Transform the query result as a JsArray
    * 
@@ -83,7 +103,9 @@ class N1QLQuery(bucket: CouchbaseBucket, query: String, host: String, port: Stri
    */
   def toJsArray(implicit ec: ExecutionContext): Future[JsArray] = {
     val result = Promise[JsValue]()
-    bucket.httpClient.preparePost(url).addQueryParameter("q", query).execute(new AsyncCompletionHandler[Response]() {
+    val builder = bucket.httpClient.preparePost(url).addQueryParam("statement", query)
+    val authorizedHttpBuilder =  Option(authorizationFields).map(name => builder.setRealm(createRealm(name))).getOrElse(builder)
+    authorizedHttpBuilder.execute(new AsyncCompletionHandler[Response]() {
       override def onCompleted(response: Response) = {
         result.success(Json.parse(response.getResponseBody))
         response
@@ -139,8 +161,8 @@ object CouchbaseN1QL {
    * @param port the port of the N1QL server
    * @return the created N1QLQuery instance
    */
-  def N1QL(bucket: CouchbaseBucket, query: String, host: String, port: String): N1QLQuery = {
-    new N1QLQuery(bucket, query, host, port)
+  def N1QL(bucket: CouchbaseBucket, query: String, host: String, port: String, authorizationFields: Option[AuthorizationFields]): N1QLQuery = {
+    new N1QLQuery(bucket, query, host, port, authorizationFields)
   }
 
   /**
@@ -169,10 +191,10 @@ object CouchbaseN1QL {
    * @param bucket the targeted bucket
    * @return the created N1QLQuery instance
    */
-  def N1QL(query: String)(implicit bucket: CouchbaseBucket): N1QLQuery = {
+  def N1QL(query: String, authorizationFields: Option[AuthorizationFields] )(implicit bucket: CouchbaseBucket): N1QLQuery = {
     val host = bucket.N1QLHost.getOrElse(throw new ReactiveCouchbaseException("Cannot find N1QL host", "Cannot find N1QL host in couchbase.n1ql conf."))
     val port = bucket.N1QLPort.getOrElse(throw new ReactiveCouchbaseException("Cannot find N1QL port", "Cannot find N1QL port in couchbase.n1ql conf."))
-    new N1QLQuery(bucket, query, host, port)
+    new N1QLQuery(bucket, query, host, port,  authorizationFields)
   }
 }
 

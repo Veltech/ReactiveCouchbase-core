@@ -161,13 +161,13 @@ class CouchbaseBucket( private[reactivecouchbase] val cbDriver: ReactiveCouchbas
    * Configuration for HTTP client
    */
   private[reactivecouchbase] val config: AsyncHttpClientConfig = new AsyncHttpClientConfig.Builder()
-    .setAllowPoolingConnection(cbDriver.configuration.getBoolean("couchbase.http.pool").getOrElse(true))
-    .setCompressionEnabled(cbDriver.configuration.getBoolean("couchbase.http.compression").getOrElse(true))
-    .setRequestTimeoutInMs(cbDriver.configuration.getInt("couchbase.http.reqtimeout").getOrElse(60000))
-    .setIdleConnectionInPoolTimeoutInMs(cbDriver.configuration.getInt("couchbase.http.idlepool").getOrElse(60000))
-    .setIdleConnectionTimeoutInMs(cbDriver.configuration.getInt("couchbase.http.idleconnection").getOrElse(60000))
-    .setMaximumConnectionsTotal(cbDriver.configuration.getInt("couchbase.http.maxTotalConnections").getOrElse(-1))
-    .setMaximumConnectionsPerHost(cbDriver.configuration.getInt("couchbase.http.maxConnectionsPerHost").getOrElse(-1))
+    .setAllowPoolingConnections(cbDriver.configuration.getBoolean("couchbase.http.pool").getOrElse(true))
+    .setCompressionEnforced(cbDriver.configuration.getBoolean("couchbase.http.compression").getOrElse(true))
+    .setRequestTimeout(cbDriver.configuration.getInt("couchbase.http.reqtimeout").getOrElse(60000))
+    .setPooledConnectionIdleTimeout(cbDriver.configuration.getInt("couchbase.http.idlepool").getOrElse(60000))
+    .setConnectTimeout(cbDriver.configuration.getInt("couchbase.http.idleconnection").getOrElse(60000))
+    .setMaxConnections(cbDriver.configuration.getInt("couchbase.http.maxTotalConnections").getOrElse(-1))
+    .setMaxConnectionsPerHost(cbDriver.configuration.getInt("couchbase.http.maxConnectionsPerHost").getOrElse(-1))
     .build()
 
   /**
@@ -290,8 +290,8 @@ class ReactiveCouchbaseDriver(as: ActorSystem, config: Configuration, log: Logge
    * @param query the actual query written in N1QL query language
    * @return a new N1QL query
    */
-  def N1QL(query: String): N1QLQuery = {
-    CouchbaseN1QL.N1QL(query)(this.buckets.head._2)
+  def N1QL(query: String, authorizationFields: Option[AuthorizationFields]): N1QLQuery = {
+    CouchbaseN1QL.N1QL(query, authorizationFields)(this.buckets.head._2)
   }
 
   /**
